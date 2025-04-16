@@ -5,7 +5,6 @@
 /build/
 !gradle/wrapper/gradle-wrapper.jar
 
-target/
 target/classes
 target/generated-sources
 target/generated-test-sources
