@@ -6,11 +6,11 @@ pipeline {
         REMOTE_USER = "root"
         REMOTE_PASS = "123456"
         REMOTE_DIR  = "/home/project/test"
-        JAR_NAME    = "jenkins-test.jar" // 构建后 jar 名称（建议换成实际 jar）
+        JAR_PATTERN = "jenkins-test-*.jar"
+        JAR_NAME    = "jenkins-test.jar"
     }
 
     stages {
-
         stage('拉取代码') {
             steps {
                 git url: 'https://github.com/Wangdewei1/jenkins-test.git'
@@ -23,41 +23,48 @@ pipeline {
             }
         }
 
-        stage('上传到远程服务器') {
+        stage('上传并部署到远程服务器') {
             steps {
                 sshPublisher(
                     publishers: [
                         sshPublisherDesc(
-                            configName: 'deploy-vm', // 你在 Jenkins Publish Over SSH 里配置的名称
+                            configName: 'deploy-vm', // Jenkins 系统配置的 SSH 名称
                             transfers: [
                                 sshTransfer(
-                                    sourceFiles: 'target/*.jar',
+                                    sourceFiles: "target/${JAR_PATTERN}",
                                     removePrefix: 'target',
                                     remoteDirectory: "${REMOTE_DIR}",
-                                    execCommand: '''
-                                        cd ${REMOTE_DIR}
-                                        pkill -f 'java -jar' || true
-                                        nohup java -jar *.jar > run.log 2>&1 &
-                                    '''
+                                    execCommand: """
+                                    # 杀掉旧进程
+                                    PID=\$(ps -ef | grep ${JAR_NAME} | grep -v grep | awk '{print \$2}')
+                                    if [ -n "\$PID" ]; then
+                                      echo "⚠️ 发现旧进程 PID: \$PID，尝试终止..."
+                                      kill -9 \$PID
+                                    fi
+
+                                    # 拷贝 jar 为统一名
+                                    cp ${REMOTE_DIR}/${JAR_PATTERN} ${REMOTE_DIR}/${JAR_NAME}
+
+                                    # 启动新进程
+                                    nohup java -jar ${REMOTE_DIR}/${JAR_NAME} > ${REMOTE_DIR}/log.txt 2>&1 &
+                                    """
                                 )
                             ],
                             usePromotionTimestamp: false,
-                            useWorkspaceInPromotion: false,
                             verbose: true
                         )
                     ]
                 )
             }
         }
-
     }
 
     post {
         success {
-            echo "🎉 项目构建并部署成功！"
+            echo "🎉 项目构建并成功部署到 ${REMOTE_HOST}！"
         }
         failure {
-            echo "❌ 构建或部署失败，请检查日志。"
+            echo "❌ 构建或部署失败，请检查日志输出。"
         }
     }
 }
