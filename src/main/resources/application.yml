@@ -1,0 +1,6 @@
+server:
+  port: 49095
+
+spring:
+  application:
+    name: jenkins-test

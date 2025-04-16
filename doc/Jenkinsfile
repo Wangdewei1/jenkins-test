@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        REMOTE_HOST = "192.168.141.130"
+        REMOTE_USER = "root"
+        REMOTE_PASS = "123456"
+        REMOTE_DIR  = "/home/project/test"
+        JAR_NAME    = "jenkins-test.jar" // 构建后 jar 名称（建议换成实际 jar）
+    }
+
+    stages {
+
+        stage('拉取代码') {
+            steps {
+                git url: 'https://github.com/Wangdewei1/jenkins-test.git'
+            }
+        }
+
+        stage('Maven 构建') {
+            steps {
+                sh 'mvn clean package -Dmaven.test.skip=true'
+            }
+        }
+
+        stage('上传到远程服务器') {
+            steps {
+                sshPublisher(
+                    publishers: [
+                        sshPublisherDesc(
+                            configName: 'deploy-vm', // 你在 Jenkins Publish Over SSH 里配置的名称
+                            transfers: [
+                                sshTransfer(
+                                    sourceFiles: 'target/*.jar',
+                                    removePrefix: 'target',
+                                    remoteDirectory: "${REMOTE_DIR}",
+                                    execCommand: '''
+                                        cd ${REMOTE_DIR}
+                                        pkill -f 'java -jar' || true
+                                        nohup java -jar *.jar > run.log 2>&1 &
+                                    '''
+                                )
+                            ],
+                            usePromotionTimestamp: false,
+                            useWorkspaceInPromotion: false,
+                            verbose: true
+                        )
+                    ]
+                )
+            }
+        }
+
+    }
+
+    post {
+        success {
+            echo "🎉 项目构建并部署成功！"
+        }
+        failure {
+            echo "❌ 构建或部署失败，请检查日志。"
+        }
+    }
+}
