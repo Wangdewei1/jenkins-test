@@ -4,3 +4,8 @@ server:
 spring:
   application:
     name: jenkins-test
+
+  thymeleaf:
+    prefix: /templates/
+    suffix: .html
+    cache: false
