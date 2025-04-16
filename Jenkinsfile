@@ -1,13 +1,17 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven3.8.4' // 这里的名字必须和你在 Jenkins 中配置的 Maven 名称一致
+    }
+
     environment {
         REMOTE_HOST = "192.168.141.130"
         REMOTE_USER = "root"
         REMOTE_PASS = "123456"
         REMOTE_DIR  = "/home/project/test"
-        JAR_PATTERN = "jenkins-test-*.jar"
         JAR_NAME    = "jenkins-test.jar"
+        // CONFIG_NAME = "deploy-vm" // SSH 配置名称
     }
 
     stages {
@@ -28,26 +32,26 @@ pipeline {
                 sshPublisher(
                     publishers: [
                         sshPublisherDesc(
-                            configName: 'deploy-vm', // Jenkins 系统配置的 SSH 名称
+                            configName: 'deploy-vm',
                             transfers: [
                                 sshTransfer(
-                                    sourceFiles: "target/${JAR_PATTERN}",
+                                    sourceFiles: 'target/*.jar',
                                     removePrefix: 'target',
-                                    remoteDirectory: "${REMOTE_DIR}",
-                                    execCommand: """
-                                    # 杀掉旧进程
-                                    PID=\$(ps -ef | grep ${JAR_NAME} | grep -v grep | awk '{print \$2}')
-                                    if [ -n "\$PID" ]; then
-                                      echo "⚠️ 发现旧进程 PID: \$PID，尝试终止..."
-                                      kill -9 \$PID
-                                    fi
+                                    // remoteDirectory: '/home/project/test',
+                                    // execCommand: 'nohup java -jar ${REMOTE_DIR}/jenkins-test.jar > ${REMOTE_DIR}/log.txt 2>&1 &'
 
-                                    # 拷贝 jar 为统一名
-                                    cp ${REMOTE_DIR}/${JAR_PATTERN} ${REMOTE_DIR}/${JAR_NAME}
+                                    execCommand: "sh -c 'echo \"🛑 停止旧进程...\" && pkill -f jenkins-test.jar || true && sleep 2 && echo \"🚀 启动新服务...\" && nohup java -jar /home/project/test/jenkins-test.jar > /home/project/test/log.txt 2>&1 & echo \"✅ 部署完成！\"'"
 
-                                    # 启动新进程
-                                    nohup java -jar ${REMOTE_DIR}/${JAR_NAME} > ${REMOTE_DIR}/log.txt 2>&1 &
-                                    """
+
+                                    // execCommand: """
+                                    // echo "🛑 停止旧进程..."
+                                    // pkill -f ${JAR_NAME} || true
+                                    // sleep 2
+                                    // echo "🚀 启动新服务..."
+                                    // nohup java -jar ${REMOTE_DIR}/${JAR_NAME} > ${REMOTE_DIR}/log.txt 2>&1 &
+                                    // echo "✅ 部署完成！"
+                                    // """
+
                                 )
                             ],
                             usePromotionTimestamp: false,
@@ -61,7 +65,7 @@ pipeline {
 
     post {
         success {
-            echo "🎉 项目构建并成功部署到 ${REMOTE_HOST}！"
+            echo "🎉 项目构建并部署成功！"
         }
         failure {
             echo "❌ 构建或部署失败，请检查日志输出。"
